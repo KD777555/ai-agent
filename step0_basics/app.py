@@ -24,6 +24,7 @@ from openai import OpenAI
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import chromadb
 from chromadb.utils import embedding_functions
@@ -48,6 +49,16 @@ client = OpenAI(
 MODEL = os.getenv("MODEL_NAME", "deepseek-v4-flash")
 
 app = FastAPI(title="AI Agent Service")
+
+# CORS：允许跨域（生产前端与后端在不同域名）
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 collection = None
 
 
