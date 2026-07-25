@@ -348,4 +348,4 @@ if __name__ == "__main__":
         print(f"✅ 知识库已加载（{collection.count()} 个文档块） | 工具：天气/计算/搜索")
     else:
         print("ℹ️  未检测到知识库，上传文档后自动创建 | 工具：天气/计算/搜索")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
