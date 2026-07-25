@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Agent</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f0f11;
+    --surface: #1a1a1e;
+    --surface-hover: #222226;
+    --border: #2c2c30;
+    --text: #e4e4e7;
+    --text-dim: #8a8a92;
+    --text-muted: #5c5c64;
+    --accent: #6366f1;
+    --accent-hover: #818cf8;
+    --accent-bg: rgba(99,102,241,0.08);
+    --radius: 10px;
+    --radius-lg: 16px;
+    --shadow: 0 1px 3px rgba(0,0,0,0.4);
+    --shadow-lg: 0 8px 32px rgba(0,0,0,0.5);
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro SC", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg); color: var(--text); height: 100vh;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+
+  /* ---- 顶栏 ---- */
+  header {
+    display: flex; align-items: center; gap: 16px;
+    padding: 14px 28px; border-bottom: 1px solid var(--border);
+    flex-shrink: 0; background: var(--surface);
+  }
+  .logo { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 600; letter-spacing: -0.3px; }
+  .logo svg { width: 24px; height: 24px; }
+
+  #kb-status {
+    font-size: 12px; padding: 4px 12px; border-radius: 20px;
+    background: var(--bg); border: 1px solid var(--border); color: var(--text-dim);
+    transition: all 0.3s;
+  }
+  #kb-status.loaded { color: #4ade80; border-color: rgba(74,222,128,0.3); background: rgba(74,222,128,0.06); }
+
+  .mode-tabs {
+    display: flex; gap: 3px; margin-left: auto;
+    background: var(--bg); border-radius: 8px; padding: 3px;
+  }
+  .mode-tab {
+    padding: 7px 18px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500;
+    border: none; background: transparent; color: var(--text-dim);
+    transition: all 0.2s; display: flex; align-items: center; gap: 6px;
+  }
+  .mode-tab svg { width: 16px; height: 16px; }
+  .mode-tab.active { background: var(--accent); color: #fff; box-shadow: 0 2px 8px rgba(99,102,241,0.3); }
+  .mode-tab:hover:not(.active) { color: var(--text); background: var(--surface-hover); }
+
+  /* ---- 主布局 ---- */
+  .layout { display: flex; flex: 1; overflow: hidden; }
+
+  /* ---- 侧边栏 ---- */
+  .sidebar {
+    width: 320px; flex-shrink: 0; border-right: 1px solid var(--border);
+    padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 18px;
+    background: var(--surface);
+  }
+  .section-title {
+    font-size: 11px; font-weight: 600; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px;
+  }
+
+  /* 上传 */
+  .upload-zone {
+    border: 1.5px dashed var(--border); border-radius: var(--radius);
+    padding: 24px 16px; text-align: center; cursor: pointer;
+    transition: all 0.25s; position: relative;
+  }
+  .upload-zone:hover { border-color: var(--accent); background: var(--accent-bg); }
+  .upload-zone.dragover { border-color: var(--accent); background: var(--accent-bg); transform: scale(1.01); }
+  .upload-zone .icon { margin-bottom: 10px; color: var(--text-muted); }
+  .upload-zone .icon svg { width: 32px; height: 32px; }
+  .upload-zone p { font-size: 13px; color: var(--text-dim); }
+  .upload-zone .hint { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
+  .file-input-hidden { display: none; }
+  .upload-btn {
+    background: var(--accent); color: #fff; border: none;
+    padding: 8px 22px; border-radius: 8px; cursor: pointer;
+    font-size: 13px; font-weight: 500; transition: all 0.2s; margin-top: 10px;
+  }
+  .upload-btn:hover { background: var(--accent-hover); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(99,102,241,0.3); }
+  .upload-btn:active { transform: translateY(0); }
+
+  #upload-status { font-size: 12px; padding: 8px 12px; border-radius: 8px; display: none; margin-top: 8px; }
+  #upload-status.success { display: block; background: rgba(74,222,128,0.08); color: #4ade80; border: 1px solid rgba(74,222,128,0.15); }
+  #upload-status.error { display: block; background: rgba(248,113,113,0.08); color: #f87171; border: 1px solid rgba(248,113,113,0.15); }
+
+  /* JD 区 */
+  .jd-section { display: none; animation: fadeSlideUp 0.3s ease; }
+  .jd-section.visible { display: block; }
+  .jd-section textarea {
+    width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 12px; font-size: 13px; resize: vertical;
+    outline: none; font-family: inherit; line-height: 1.6; min-height: 110px;
+    transition: border-color 0.2s;
+  }
+  .jd-section textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+  .jd-section label { font-size: 12px; color: var(--text-dim); display: block; margin-bottom: 5px; }
+
+  /* 快捷按钮 */
+  .quick-btns { display: flex; flex-direction: column; gap: 6px; }
+  .quick-btn {
+    background: var(--bg); border: 1px solid var(--border); color: var(--text);
+    padding: 9px 14px; border-radius: 8px; cursor: pointer; font-size: 13px;
+    text-align: left; transition: all 0.2s; display: flex; align-items: center; gap: 8px;
+  }
+  .quick-btn svg { width: 16px; height: 16px; color: var(--accent); flex-shrink: 0; }
+  .quick-btn:hover { border-color: var(--accent); background: var(--accent-bg); transform: translateX(2px); }
+  .quick-btn:active { transform: translateX(0); }
+
+  .help-text { font-size: 12px; color: var(--text-muted); line-height: 1.7; }
+
+  /* ---- 主对话区 ---- */
+  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; background: var(--bg); }
+
+  #chat-messages {
+    flex: 1; overflow-y: auto; padding: 28px 32px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  #chat-messages:empty::after {
+    content: "上传文档后开始提问，或切换到「求职助手」模式";
+    display: block; text-align: center; color: var(--text-muted);
+    font-size: 14px; margin-top: 80px;
+    max-width: 360px; margin-left: auto; margin-right: auto; line-height: 1.7;
+  }
+
+  @keyframes fadeSlideIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .msg {
+    max-width: 78%; padding: 12px 18px; border-radius: var(--radius);
+    line-height: 1.65; font-size: 14px; white-space: pre-wrap; word-break: break-word;
+    animation: fadeSlideIn 0.25s ease; position: relative;
+  }
+  .msg.user {
+    align-self: flex-end; background: var(--accent); color: #fff;
+    border-bottom-right-radius: 4px;
+  }
+  .msg.assistant {
+    align-self: flex-start; background: var(--surface); border: 1px solid var(--border);
+    border-bottom-left-radius: 4px;
+  }
+
+  /* 打字指示器 */
+  @keyframes dotPulse { 0%, 80%, 100% { transform: scale(0.8); opacity: 0.4; } 40% { transform: scale(1); opacity: 1; } }
+  .typing-dots { display: flex; gap: 4px; padding: 4px 0; }
+  .typing-dots span {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--text-dim);
+    animation: dotPulse 1.2s infinite ease-in-out;
+  }
+  .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+  /* 输入区 */
+  .input-area {
+    border-top: 1px solid var(--border); padding: 16px 28px 20px;
+    display: flex; gap: 10px; align-items: flex-end; background: var(--surface);
+  }
+  .input-area textarea {
+    flex: 1; background: var(--bg); color: var(--text); border: 1px solid var(--border);
+    border-radius: 10px; padding: 11px 16px; font-size: 14px;
+    resize: none; outline: none; font-family: inherit; line-height: 1.5;
+    transition: border-color 0.2s, box-shadow 0.2s; max-height: 120px;
+  }
+  .input-area textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(99,102,241,0.1); }
+  .input-area textarea::placeholder { color: var(--text-muted); }
+
+  .send-btn {
+    background: var(--accent); color: #fff; border: none;
+    width: 42px; height: 42px; border-radius: 10px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s; flex-shrink: 0;
+  }
+  .send-btn svg { width: 20px; height: 20px; }
+  .send-btn:hover { background: var(--accent-hover); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(99,102,241,0.3); }
+  .send-btn:active { transform: translateY(0); }
+  .send-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: none; }
+  .send-btn.loading { position: relative; }
+  .send-btn.loading svg { display: none; }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .send-btn.loading::after {
+    content: ''; width: 18px; height: 18px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: #fff; border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+  }
+
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+  @keyframes fadeSlideUp { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>
+    </svg>
+    AI Agent
+  </div>
+  <span id="kb-status" class="empty">⚪ 知识库未加载</span>
+  <div class="mode-tabs">
+    <button class="mode-tab active" data-mode="general" onclick="switchMode('general')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      通用
+    </button>
+    <button class="mode-tab" data-mode="career" onclick="switchMode('career')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
+      求职助手
+    </button>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div>
+      <div class="section-title">📁 知识库</div>
+      <div class="upload-zone" id="upload-zone">
+        <div class="icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+        </div>
+        <p>拖拽文件或点击上传</p>
+        <p class="hint">支持 .md .txt .pdf</p>
+        <input type="file" id="file-input" class="file-input-hidden" accept=".md,.txt,.pdf">
+        <button class="upload-btn" onclick="document.getElementById('file-input').click()">选择文件</button>
+      </div>
+      <div id="upload-status"></div>
+    </div>
+
+    <div class="jd-section" id="jd-section">
+      <div class="section-title">📋 岗位描述</div>
+      <label>粘贴目标岗位 JD，求职模式会自动参考</label>
+      <textarea id="jd-input" placeholder="在此粘贴岗位 JD..."></textarea>
+    </div>
+
+    <div class="jd-section" id="quick-section">
+      <div class="section-title">⚡ 快捷操作</div>
+      <div class="quick-btns">
+        <button class="quick-btn" onclick="quickAsk('分析我的简历和这个岗位的匹配度，指出优势和不足')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          分析匹配度
+        </button>
+        <button class="quick-btn" onclick="quickAsk('根据我的简历和这个 JD，模拟一场技术面试')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+          模拟面试
+        </button>
+        <button class="quick-btn" onclick="quickAsk('我的简历哪里需要改进？给出具体的修改建议')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          优化简历
+        </button>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-title">💡 提示</div>
+      <div class="help-text" id="help-text">上传文档后 AI 将基于知识库回答问题</div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div id="chat-messages"></div>
+    <div class="input-area">
+      <textarea id="query-input" rows="1" placeholder="输入问题…"></textarea>
+      <button class="send-btn" id="send-btn" onclick="sendMessage()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API_BASE = '';
+let currentMode = 'general';
+
+const kbStatus = document.getElementById('kb-status');
+const chatMessages = document.getElementById('chat-messages');
+const queryInput = document.getElementById('query-input');
+const sendBtn = document.getElementById('send-btn');
+const fileInput = document.getElementById('file-input');
+const uploadStatus = document.getElementById('upload-status');
+const jdInput = document.getElementById('jd-input');
+const helpText = document.getElementById('help-text');
+
+const uploadZone = document.querySelector('.upload-zone');
+
+// ---- 模式切换 ----
+function switchMode(mode) {
+  currentMode = mode;
+  document.querySelectorAll('.mode-tab').forEach(t => t.classList.toggle('active', t.dataset.mode === mode));
+
+  const isCareer = mode === 'career';
+  document.getElementById('jd-section').classList.toggle('visible', isCareer);
+  document.getElementById('quick-section').classList.toggle('visible', isCareer);
+  helpText.textContent = isCareer
+    ? '上传简历(PDF) → 粘贴 JD → 点击快捷操作，或直接输入问题'
+    : '上传文档后 AI 将基于知识库回答问题';
+
+  queryInput.placeholder = isCareer ? '输入求职相关问题…' : '输入问题…';
+  chatMessages.innerHTML = '';
+}
+
+// ---- 初始化 ----
+async function checkKB() {
+  try {
+    const res = await fetch(`${API_BASE}/health`);
+    const data = await res.json();
+    const loaded = data.kb_loaded && data.doc_count > 0;
+    kbStatus.textContent = loaded ? `🟢 ${data.doc_count} 个文档块` : '⚪ 知识库未加载';
+    kbStatus.className = loaded ? 'loaded' : 'empty';
+  } catch {
+    kbStatus.textContent = '🔴 服务未连接';
+    kbStatus.className = 'empty';
+  }
+}
+checkKB();
+
+// ---- 文件上传 ----
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+uploadZone.addEventListener('drop', e => { e.preventDefault(); uploadZone.classList.remove('dragover'); uploadFile(e.dataTransfer.files[0]); });
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) uploadFile(fileInput.files[0]); });
+uploadZone.addEventListener('click', e => { if (e.target.tagName !== 'BUTTON') fileInput.click(); });
+
+async function uploadFile(file) {
+  if (!file) return;
+  const ext = file.name.split('.').pop().toLowerCase();
+  if (!['md', 'txt', 'pdf'].includes(ext)) { showUploadStatus('仅支持 .md .txt .pdf', 'error'); return; }
+  showUploadStatus('上传中…', '');
+  const form = new FormData(); form.append('file', file);
+  try {
+    const res = await fetch(`${API_BASE}/upload`, { method: 'POST', body: form });
+    const data = await res.json();
+    if (res.ok) {
+      showUploadStatus(`✅ ${data.chunks} 个块已入库`, 'success');
+      kbStatus.textContent = `🟢 ${data.chunks} 个文档块`; kbStatus.className = 'loaded';
+    } else { showUploadStatus(data.detail || '上传失败', 'error'); }
+  } catch { showUploadStatus('网络错误', 'error'); }
+}
+function showUploadStatus(msg, type) {
+  uploadStatus.textContent = msg; uploadStatus.className = type;
+  if (type) setTimeout(() => { uploadStatus.className = ''; }, 4000);
+}
+
+// ---- 快捷操作 ----
+function quickAsk(text) { queryInput.value = text; sendMessage(); }
+
+// ---- 发送 ----
+queryInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+
+async function sendMessage() {
+  const query = queryInput.value.trim();
+  if (!query) return;
+
+  let finalQuery = query;
+  if (currentMode === 'career') {
+    const jd = jdInput.value.trim();
+    if (jd) finalQuery = `[岗位JD]\n${jd}\n\n[问题]\n${query}`;
+  }
+
+  addMessage(query, 'user');
+  queryInput.value = '';
+  queryInput.style.height = 'auto';
+  sendBtn.disabled = true;
+  sendBtn.classList.add('loading');
+
+  const aiBubble = addMessage('', 'assistant');
+  // 打字指示器
+  const dots = document.createElement('div'); dots.className = 'typing-dots';
+  dots.innerHTML = '<span></span><span></span><span></span>';
+  aiBubble.appendChild(dots);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+  let fullText = '';
+
+  try {
+    const resp = await fetch(`${API_BASE}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: finalQuery, temperature: 0.3, mode: currentMode }),
+    });
+    if (!resp.ok) { aiBubble.textContent = '请求失败'; return; }
+
+    // 移除打字指示器
+    dots.remove();
+    aiBubble.textContent = '';
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      fullText += decoder.decode(value, { stream: true });
+      aiBubble.textContent = fullText;
+      chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+  } catch {
+    dots.remove();
+    aiBubble.textContent = '网络错误，请检查服务';
+  }
+  sendBtn.disabled = false;
+  sendBtn.classList.remove('loading');
+}
+
+function addMessage(text, role) {
+  const div = document.createElement('div');
+  div.className = 'msg ' + role;
+  div.textContent = text;
+  chatMessages.appendChild(div);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+  return div;
+}
+
+// 自适应输入框
+queryInput.addEventListener('input', () => {
+  queryInput.style.height = 'auto';
+  queryInput.style.height = Math.min(queryInput.scrollHeight, 120) + 'px';
+});
+</script>
+</body>
+</html>
